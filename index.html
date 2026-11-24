@@ -110,12 +110,12 @@ function render(){
 }
 function chips(){
   const el=document.getElementById('chips');
-  el.innerHTML=YEARS.map(y=>`<button class="chip on" style="--c:${COLORS[y]}" data-y="${y}"><i></i>${y} <span>${data.filter(p=>p.anio==y).length}</span></button>`).join('');
+  el.innerHTML=YEARS.map(y=>`<button class="chip on" style="--c:${COLORS[y]}" data-y="${y}"><i></i>${y} <span>${new Set(data.filter(p=>p.anio==y).map(p=>p.proyecto)).size}</span></button>`).join('');
   el.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{const y=b.dataset.y;active.has(y)?active.delete(y):active.add(y);b.classList.toggle('on');render()});
 }
 function temas(){
   const el=document.getElementById('temas');
-  el.innerHTML=TEMAS.map(x=>`<button class="tema on" data-t="${esc(x)}">${esc(x)} <span style="opacity:.7">${data.filter(p=>p.tema==x).length}</span></button>`).join('');
+  el.innerHTML=TEMAS.map(x=>`<button class="tema on" data-t="${esc(x)}">${esc(x)} <span style="opacity:.7">${new Set(data.filter(p=>p.tema==x).map(p=>p.anio+p.proyecto)).size}</span></button>`).join('');
   el.querySelectorAll('.tema').forEach(b=>b.onclick=()=>{const x=b.dataset.t;temaOn.has(x)?temaOn.delete(x):temaOn.add(x);b.classList.toggle('on');render()});
 }
 function init(rows){data=rows;build();chips();temas();render();
