@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapa de proyectos · Fondo Jóvenes en Acción Climática Rosario</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{--y2024:#2F80C8;--y2025:#E58A17;--y2026:#5B2A86;--ink:#1d2330;--mut:#667085;--line:#e4e7ec;--bg:#f7f8fa}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:Inter,system-ui,sans-serif;color:var(--ink)}
+body{display:flex;flex-direction:column}
+header{padding:12px 18px;border-bottom:1px solid var(--line);background:#fff;display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center}
+header h1{font:700 18px 'Space Grotesk',sans-serif;margin:0}
+header small{color:var(--mut);font-size:12px;display:block;font-weight:400;font-family:Inter}
+.chips{display:flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+.chip{border:1.5px solid var(--c);color:var(--c);background:#fff;border-radius:999px;padding:5px 12px;font:600 13px Inter;cursor:pointer;display:flex;gap:6px;align-items:center}
+.chip i{width:10px;height:10px;border-radius:50%;background:var(--c);display:inline-block}
+.chip.on{background:var(--c);color:#fff}.chip.on i{background:#fff}
+.chip span{font-weight:500;opacity:.85}
+main{flex:1;display:flex;min-height:0}
+aside{width:340px;border-right:1px solid var(--line);background:var(--bg);display:flex;flex-direction:column;min-height:0}
+#q{margin:0 12px 12px;padding:9px 12px;border:1px solid var(--line);border-radius:8px;font:14px Inter;width:calc(100% - 24px)}
+.temas{display:flex;flex-wrap:wrap;gap:6px;padding:12px 12px 10px}
+.tema{border:1px solid var(--line);background:#fff;color:var(--ink);border-radius:999px;padding:4px 10px;font:500 12px Inter;cursor:pointer}
+.tema.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+#list{overflow:auto;flex:1;padding:0 12px 12px}
+.item{background:#fff;border:1px solid var(--line);border-left:5px solid var(--c);border-radius:8px;padding:9px 11px;margin-bottom:8px;cursor:pointer}
+.item:hover{box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.item b{font-size:13.5px;display:block;line-height:1.3}
+.item em{font-style:normal;color:var(--mut);font-size:12px}
+.item.noloc{cursor:default;opacity:.85}
+details{margin:0 0 10px}summary{cursor:pointer;font:600 12px Inter;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;padding:8px 2px}
+#map{flex:1;min-width:0}
+.pin{width:26px;height:26px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 1px 5px rgba(0,0,0,.4);background:var(--c)}
+.pin::after{content:"";position:absolute;width:8px;height:8px;border-radius:50%;background:#fff;top:7px;left:7px}
+.pop{width:270px}.pop .y{display:inline-block;color:#fff;border-radius:999px;padding:2px 10px;font:600 11px Inter;margin-bottom:6px}
+.pop h3{font:700 15px 'Space Grotesk';margin:0 0 4px;line-height:1.25}
+.pop .l{color:var(--mut);font-size:12px;margin-bottom:6px}
+.pop p{font-size:13px;line-height:1.4;margin:6px 0 0}
+.pop .a{font-size:12px;color:var(--mut)}
+.leaflet-popup-content{margin:14px 16px}
+@media(max-width:760px){main{flex-direction:column-reverse}aside{width:100%;height:38%;border-right:0;border-top:1px solid var(--line)}.chips{margin-left:0}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Proyectos del Fondo Jóvenes en Acción Climática<small>Rosario · ediciones 2024, 2025 y 2026</small></h1>
+  <div class="chips" id="chips"></div>
+</header>
+<main>
+  <aside>
+    <div class="temas" id="temas"></div>
+    <input id="q" type="search" placeholder="Buscar proyecto, lugar o autor…">
+    <div id="list"></div>
+  </aside>
+  <div id="map"></div>
+</main>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const COLORS={'2024':'#2F80C8','2025':'#E58A17','2026':'#5B2A86'};
+const YEARS=['2024','2025','2026'];
+const active=new Set(YEARS);
+const TEMAS=['Energía','Educación','Biodiversidad y verde urbano','Residuos','Adaptación al calor'];
+const temaOn=new Set(TEMAS);
+const esc=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function parseCSV(t){const rows=[];let r=[],f='',q=false;
+  for(let i=0;i<t.length;i++){const c=t[i];
+    if(q){if(c=='"'){if(t[i+1]=='"'){f+='"';i++}else q=false}else f+=c}
+    else if(c=='"')q=true;else if(c==','){r.push(f);f=''}
+    else if(c=='\n'){r.push(f);rows.push(r);r=[];f=''}else if(c!='\r')f+=c}
+  if(f||r.length){r.push(f);rows.push(r)}
+  const h=rows.shift();return rows.filter(x=>x.length>1).map(x=>Object.fromEntries(h.map((k,i)=>[k,(x[i]||'').trim()])))}
+
+const map=L.map('map').setView([-32.9468,-60.6393],12);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'&copy; colaboradores de <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);
+let data=[],markers=[];
+
+function pinIcon(c){return L.divIcon({className:'',html:`<div class="pin" style="--c:${c}"></div>`,iconSize:[26,26],iconAnchor:[13,26],popupAnchor:[0,-24]})}
+function popup(p){
+  return `<div class="pop"><span class="y" style="background:${COLORS[p.anio]}">${esc(p.anio)}</span>
+  <h3>${esc(p.proyecto)}</h3><div class="l">${esc(p.lugar)}${p.direccion?' · '+esc(p.direccion):''}</div>
+  ${p.autor?`<div class="a">${esc(p.autor)}</div>`:''}
+  ${p.descripcion?`<p>${esc(p.descripcion)}</p>`:''}
+  ${p.eje?`<p class="a">Eje: ${esc(p.eje)}</p>`:''}</div>`}
+
+function build(){
+  // desplazar levemente proyectos que comparten el mismo punto
+  const groups={};
+  data.forEach(p=>{if(p.lat&&p.lon){(groups[p.lat+','+p.lon]??=[]).push(p)}});
+  Object.values(groups).forEach(g=>{
+    if(g.length==1){g[0]._ll=[+g[0].lat,+g[0].lon];return}
+    g.forEach((p,i)=>{const a=2*Math.PI*i/g.length-Math.PI/2,r=0.00016;
+      p._ll=[+p.lat+r*Math.sin(a),+p.lon+r*Math.cos(a)/Math.cos(+p.lat*Math.PI/180)]})});
+  data.forEach(p=>{if(p._ll){p._m=L.marker(p._ll,{icon:pinIcon(COLORS[p.anio]),title:p.proyecto}).bindPopup(popup(p),{maxWidth:300})}});
+}
+function render(){
+  const term=document.getElementById('q').value.toLowerCase();
+  const vis=data.filter(p=>active.has(p.anio)&&temaOn.has(p.tema)&&(p.proyecto+' '+p.lugar+' '+p.autor).toLowerCase().includes(term));
+  markers.forEach(m=>map.removeLayer(m));markers=[];
+  vis.forEach(p=>{if(p._m){p._m.addTo(map);markers.push(p._m)}});
+  const item=(p,loc)=>`<div class="item ${loc?'':'noloc'}" style="--c:${COLORS[p.anio]}" data-i="${data.indexOf(p)}"><b>${esc(p.proyecto)}</b><em>${p.anio} · ${esc(p.lugar||'lugar a confirmar')}</em></div>`;
+  const con=vis.filter(p=>p._m),sin=vis.filter(p=>!p._m);
+  document.getElementById('list').innerHTML=con.map(p=>item(p,1)).join('')+
+    (sin.length?`<details><summary>Sin ubicar en el mapa (${sin.length})</summary>${sin.map(p=>item(p,0)).join('')}</details>`:'');
+  document.querySelectorAll('.item:not(.noloc)').forEach(el=>el.onclick=()=>{const p=data[+el.dataset.i];map.setView(p._ll,16);p._m.openPopup()});
+}
+function chips(){
+  const el=document.getElementById('chips');
+  el.innerHTML=YEARS.map(y=>`<button class="chip on" style="--c:${COLORS[y]}" data-y="${y}"><i></i>${y} <span>${data.filter(p=>p.anio==y).length}</span></button>`).join('');
+  el.querySelectorAll('.chip').forEach(b=>b.onclick=()=>{const y=b.dataset.y;active.has(y)?active.delete(y):active.add(y);b.classList.toggle('on');render()});
+}
+function temas(){
+  const el=document.getElementById('temas');
+  el.innerHTML=TEMAS.map(x=>`<button class="tema on" data-t="${esc(x)}">${esc(x)} <span style="opacity:.7">${data.filter(p=>p.tema==x).length}</span></button>`).join('');
+  el.querySelectorAll('.tema').forEach(b=>b.onclick=()=>{const x=b.dataset.t;temaOn.has(x)?temaOn.delete(x):temaOn.add(x);b.classList.toggle('on');render()});
+}
+function init(rows){data=rows;build();chips();temas();render();
+  const pts=data.filter(p=>p._ll).map(p=>p._ll);if(pts.length)map.fitBounds(pts,{padding:[40,40]});
+  document.getElementById('q').oninput=render}
+const INLINE=null;
+(INLINE?Promise.resolve(INLINE):fetch('proyectos.csv').then(r=>r.text())).then(t=>init(parseCSV(t)));
+</script>
+</body>
+</html>
